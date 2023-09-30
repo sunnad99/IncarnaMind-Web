@@ -20,13 +20,15 @@ from toolkit.utils import (
     check_device,
 )
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Load the config file
 configs = Config("configparser.ini")
 logger = logging.getLogger(__name__)
 
-os.environ["OPENAI_API_KEY"] = configs.openai_api_key
-os.environ["ANTHROPIC_API_KEY"] = configs.anthropic_api_key
 
 embedding = choose_embeddings(configs.embedding_name)
 db_store_path = configs.db_dir

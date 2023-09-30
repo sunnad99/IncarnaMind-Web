@@ -23,13 +23,14 @@ from langchain.document_loaders import (
 )
 
 from toolkit.utils import Config, choose_embeddings, clean_text
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # Load the config file
 configs = Config("configparser.ini")
 
-os.environ["OPENAI_API_KEY"] = configs.openai_api_key
-os.environ["ANTHROPIC_API_KEY"] = configs.anthropic_api_key
 
 embedding_store_path = configs.db_dir
 files_path = glob.glob(configs.docs_dir + "/*")
