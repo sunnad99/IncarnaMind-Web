@@ -32,8 +32,11 @@ load_dotenv()
 configs = Config("configparser.ini")
 
 
-embedding_store_path = configs.db_dir
-files_path = glob.glob(configs.docs_dir + "/*")
+embedding_store_path = (configs
+                        .db_dir
+                        .replace("./", "")
+                        .replace("/", "")
+                    )
 
 tokenizer_name = tiktoken.encoding_for_model("gpt-3.5-turbo")
 tokenizer = tiktoken.get_encoding(tokenizer_name.name)
@@ -94,7 +97,7 @@ def load_file(file_path):
     raise ValueError(f"Extension {ext} not supported")
 
 
-def docs2vectorstore(docs: List[Document], embedding_name: str, suffix: str = ""):
+def docs2vectorstore(docs: List[Document], embedding_name: str, suffix: str = "", root_dir: str = "NA"):
     """Convert a list of Documents into a Chroma vector store.
 
     Args:
@@ -104,16 +107,17 @@ def docs2vectorstore(docs: List[Document], embedding_name: str, suffix: str = ""
     embedding = choose_embeddings(embedding_name)
     name = f"{embedding_name}_{suffix}"
     # if embedding_store_path is not existing, create it
-    if not os.path.exists(embedding_store_path):
-        os.makedirs(embedding_store_path)
+    main_dir: str = f"{root_dir}/{embedding_store_path}"
+    if not os.path.exists(main_dir):
+        os.makedirs(main_dir)
     Chroma.from_documents(
         docs,
         embedding,
-        persist_directory=f"{embedding_store_path}/chroma_{name}",
+        persist_directory=f"{main_dir}/chroma_{name}",
     )
 
 
-def file_names2pickle(file_names: list, save_name: str = ""):
+def file_names2pickle(file_names: list, save_name: str = "", root_dir: str = "NA"):
     """Save the list of file names to a pickle file.
 
     Args:
@@ -121,13 +125,14 @@ def file_names2pickle(file_names: list, save_name: str = ""):
         save_name (str, optional): The name for the saved pickle file. Defaults to "".
     """
     name = f"{save_name}"
-    if not os.path.exists(embedding_store_path):
-        os.makedirs(embedding_store_path)
-    with open(f"{embedding_store_path}/{name}.pkl", "wb") as file:
+    main_dir: str = f"{root_dir}/{embedding_store_path}"
+    if not os.path.exists(main_dir):
+        os.makedirs(main_dir)
+    with open(f"{main_dir}/{name}.pkl", "wb") as file:
         pickle.dump(file_names, file)
 
 
-def docs2pickle(docs: List[Document], suffix: str = ""):
+def docs2pickle(docs: List[Document], suffix: str = "", root_dir: str = "NA"):
     """Serializes a list of Document objects to a pickle file.
 
     Args:
@@ -137,9 +142,10 @@ def docs2pickle(docs: List[Document], suffix: str = ""):
     for doc in docs:
         doc.page_content = clean_text(doc.page_content)
     name = f"pickle_{suffix}"
-    if not os.path.exists(embedding_store_path):
-        os.makedirs(embedding_store_path)
-    with open(f"{embedding_store_path}/docs_{name}.pkl", "wb") as file:
+    main_dir: str = f"{root_dir}/{embedding_store_path}"
+    if not os.path.exists(main_dir):
+        os.makedirs(main_dir)
+    with open(f"{main_dir}/docs_{name}.pkl", "wb") as file:
         pickle.dump(docs, file)
 
 
@@ -294,8 +300,17 @@ def merge_chunks(doc: Document, scale_factor: int, chunk_idx_name: str):
     return merged_doc
 
 
-def process_files():
+def process_files(root_dir: str = "NA") -> bool:
     """Main function for processing files. Loads, tokenizes, and saves document data."""
+
+    files_path: list = glob.glob(f"{root_dir}/{configs.docs_dir}" + "/*")
+
+    # check if any files exist
+    if not files_path:
+        print("No pdfs exist here...exiting!")
+        return False
+
+
     with Pool() as pool:
         chunks_small = []
         chunks_medium = []
@@ -334,14 +349,12 @@ def process_files():
 
                 pbar.update()
 
-    file_names2pickle(file_names, save_name="file_names")
+    file_names2pickle(file_names, save_name="file_names", root_dir=root_dir)
 
-    docs2vectorstore(chunks_small, configs.embedding_name, suffix="chunks_small")
-    docs2vectorstore(chunks_medium, configs.embedding_name, suffix="chunks_medium")
+    docs2vectorstore(chunks_small, configs.embedding_name, suffix="chunks_small", root_dir=root_dir)
+    docs2vectorstore(chunks_medium, configs.embedding_name, suffix="chunks_medium", root_dir=root_dir)
 
-    docs2pickle(chunks_small, suffix="chunks_small")
-    docs2pickle(chunks_medium, suffix="chunks_medium")
+    docs2pickle(chunks_small, suffix="chunks_small", root_dir=root_dir)
+    docs2pickle(chunks_medium, suffix="chunks_medium", root_dir=root_dir)
 
-
-if __name__ == "__main__":
-    process_files()
+    return True
