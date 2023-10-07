@@ -1,6 +1,13 @@
 import os
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Depends
+from fastapi import Query, Body
+
+from chat_with_pdf import chat, load_retriever_chain
+from convo_qa_chain import ConvoRetrievalChain
 from docs2db import process_files
+
+from params.chat_with_pdf_params import ChatWithPdfParams
+
 from config import FS_PATH
 from dotenv import load_dotenv
 
@@ -10,13 +17,13 @@ app = FastAPI()
 
 
 @app.post("/upload")
-async def upload_file(user_id: str, file: UploadFile = File(...)):
+async def upload_file(user_id: str, document_id:str, file: UploadFile = File(...)):
 
     # Read file contents
     file_content: bytes = file.file.read()
 
     # Create the path to store the file
-    root_dir: str = f"{FS_PATH}{user_id}"
+    root_dir: str = f"{FS_PATH}{user_id}/{document_id}"
     pdf_data_path: str = f"{root_dir}/data"
     pdf_file_path: str = f"{pdf_data_path}/{file.filename}"
     response: dict = {"message": "File stored successfully", "status": 200}
@@ -41,3 +48,34 @@ async def upload_file(user_id: str, file: UploadFile = File(...)):
         return response
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/chat")
+async def chat_with_pdf(user_id: str, document_id: str, body: ChatWithPdfParams):
+
+    # Read the parameters
+    user_query: str = body.user_query
+    chat_history: list = body.chat_history
+
+    root_dir: str = f"{FS_PATH}{user_id}/{document_id}"
+    # Check if the user directory exists
+    if not os.path.exists(root_dir):
+        return {"message": "User does not exist", "status": 400}
+
+    # Check if the database exists
+    db_path: str = f"{root_dir}/database_store"
+    print(db_path)
+    if not os.path.exists(db_path):
+        return {"message": "User does not have a database", "status": 404}
+
+    response = {"message": "", "status": 200}
+    try:
+
+        # Carry out the chat with the pdf
+        retriever_chain: ConvoRetrievalChain = load_retriever_chain(db_path)
+        ai_response: str = chat(user_query, chat_history, retriever_chain)
+        response["message"] = ai_response
+
+        return response
+    except Exception as e:
+        return {"error": str(e), "status": 500}
